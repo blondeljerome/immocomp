@@ -6,7 +6,7 @@ import libsql_client
 import ssl
 import certifi
 
-# Correctif SSL macOS
+# Correctif SSL macOS / Cloud
 ssl_context = ssl.create_default_context(cafile=certifi.where())
 ssl._create_default_https_context = lambda: ssl_context
 
@@ -29,7 +29,7 @@ def get_turso_client():
 
 def init_db():
     client = get_turso_client()
-    query = '''
+    query_create = '''
         CREATE TABLE IF NOT EXISTS properties (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nom TEXT NOT NULL,
@@ -37,26 +37,51 @@ def init_db():
             prix_achat REAL,
             frais_notaire REAL,
             travaux REAL,
-            meubles REAL,
+            meubles REAL DEFAULT 0,
             loyer_mensuel REAL,
             charges_annuelles REAL,
             taxe_fonciere REAL,
-            assurance_pno REAL,
-            frais_compta REAL,
-            vacance_semaines INTEGER,
-            apport REAL,
-            taux_credit REAL,
-            duree_credit INTEGER,
-            irl_annuel REAL,
-            part_terrain_pct REAL
+            assurance_pno REAL DEFAULT 120,
+            frais_compta REAL DEFAULT 500,
+            vacance_semaines INTEGER DEFAULT 2,
+            apport REAL DEFAULT 0,
+            taux_credit REAL DEFAULT 3.5,
+            duree_credit INTEGER DEFAULT 20,
+            irl_annuel REAL DEFAULT 1.5,
+            part_terrain_pct REAL DEFAULT 15.0
         )
     '''
+    
+    # Colonnes à ajouter automatiquement sur les bases existantes si absentes
+    migrations = [
+        ("meubles", "REAL DEFAULT 0"),
+        ("assurance_pno", "REAL DEFAULT 120"),
+        ("frais_compta", "REAL DEFAULT 500"),
+        ("vacance_semaines", "INTEGER DEFAULT 2"),
+        ("apport", "REAL DEFAULT 0"),
+        ("taux_credit", "REAL DEFAULT 3.5"),
+        ("duree_credit", "INTEGER DEFAULT 20"),
+        ("irl_annuel", "REAL DEFAULT 1.5"),
+        ("part_terrain_pct", "REAL DEFAULT 15.0")
+    ]
+
     if client:
-        client.execute(query)
+        client.execute(query_create)
+        for col, col_type in migrations:
+            try:
+                client.execute(f"ALTER TABLE properties ADD COLUMN {col} {col_type}")
+            except Exception:
+                pass  # La colonne existe déjà
         client.close()
     else:
         conn = sqlite3.connect("database.db")
-        conn.execute(query)
+        conn.execute(query_create)
+        cursor = conn.cursor()
+        for col, col_type in migrations:
+            try:
+                cursor.execute(f"ALTER TABLE properties ADD COLUMN {col} {col_type}")
+            except sqlite3.OperationalError:
+                pass  # La colonne existe déjà
         conn.commit()
         conn.close()
 
@@ -67,12 +92,23 @@ def load_properties():
         client.close()
         columns = rs.columns
         rows = [list(r) for r in rs.rows]
-        return pd.DataFrame(rows, columns=columns)
+        df = pd.DataFrame(rows, columns=columns)
     else:
         conn = sqlite3.connect("database.db")
         df = pd.read_sql_query("SELECT * FROM properties", conn)
         conn.close()
-        return df
+
+    # Sécurité supplémentaire : s'assurer que toutes les colonnes requises existent dans le DataFrame
+    defaults = {
+        'meubles': 0.0, 'assurance_pno': 120.0, 'frais_compta': 500.0,
+        'vacance_semaines': 2, 'apport': 0.0, 'taux_credit': 3.5,
+        'duree_credit': 20, 'irl_annuel': 1.5, 'part_terrain_pct': 15.0
+    }
+    for col, default_val in defaults.items():
+        if col not in df.columns:
+            df[col] = default_val
+
+    return df
 
 def save_property(data):
     client = get_turso_client()
