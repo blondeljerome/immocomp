@@ -37,13 +37,18 @@ def init_db():
             prix_achat REAL,
             frais_notaire REAL,
             travaux REAL,
+            meubles REAL,
             loyer_mensuel REAL,
             charges_annuelles REAL,
             taxe_fonciere REAL,
+            assurance_pno REAL,
+            frais_compta REAL,
+            vacance_semaines INTEGER,
             apport REAL,
             taux_credit REAL,
             duree_credit INTEGER,
-            irl_annuel REAL
+            irl_annuel REAL,
+            part_terrain_pct REAL
         )
     '''
     if client:
@@ -72,14 +77,21 @@ def load_properties():
 def save_property(data):
     client = get_turso_client()
     query = '''
-        INSERT INTO properties (nom, ville, prix_achat, frais_notaire, travaux, loyer_mensuel, charges_annuelles, taxe_fonciere, apport, taux_credit, duree_credit, irl_annuel)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO properties (
+            nom, ville, prix_achat, frais_notaire, travaux, meubles,
+            loyer_mensuel, charges_annuelles, taxe_fonciere, assurance_pno,
+            frais_compta, vacance_semaines, apport, taux_credit, duree_credit,
+            irl_annuel, part_terrain_pct
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     '''
     params = (
         data['nom'], data['ville'], float(data['prix_achat']), float(data['frais_notaire']),
-        float(data['travaux']), float(data['loyer_mensuel']), float(data['charges_annuelles']),
-        float(data['taxe_fonciere']), float(data['apport']), float(data['taux_credit']),
-        int(data['duree_credit']), float(data['irl_annuel'])
+        float(data['travaux']), float(data['meubles']), float(data['loyer_mensuel']),
+        float(data['charges_annuelles']), float(data['taxe_fonciere']), float(data['assurance_pno']),
+        float(data['frais_compta']), int(data['vacance_semaines']), float(data['apport']),
+        float(data['taux_credit']), int(data['duree_credit']), float(data['irl_annuel']),
+        float(data['part_terrain_pct'])
     )
     if client:
         client.execute(query, params)
@@ -91,20 +103,22 @@ def save_property(data):
         conn.close()
 
 def update_property(prop_id, data):
-    """Met à jour un bien existant grâce à son ID."""
     client = get_turso_client()
     query = '''
         UPDATE properties
-        SET nom = ?, ville = ?, prix_achat = ?, frais_notaire = ?, travaux = ?,
-            loyer_mensuel = ?, charges_annuelles = ?, taxe_fonciere = ?, apport = ?,
-            taux_credit = ?, duree_credit = ?, irl_annuel = ?
+        SET nom = ?, ville = ?, prix_achat = ?, frais_notaire = ?, travaux = ?, meubles = ?,
+            loyer_mensuel = ?, charges_annuelles = ?, taxe_fonciere = ?, assurance_pno = ?,
+            frais_compta = ?, vacance_semaines = ?, apport = ?, taux_credit = ?,
+            duree_credit = ?, irl_annuel = ?, part_terrain_pct = ?
         WHERE id = ?
     '''
     params = (
         data['nom'], data['ville'], float(data['prix_achat']), float(data['frais_notaire']),
-        float(data['travaux']), float(data['loyer_mensuel']), float(data['charges_annuelles']),
-        float(data['taxe_fonciere']), float(data['apport']), float(data['taux_credit']),
-        int(data['duree_credit']), float(data['irl_annuel']), int(prop_id)
+        float(data['travaux']), float(data['meubles']), float(data['loyer_mensuel']),
+        float(data['charges_annuelles']), float(data['taxe_fonciere']), float(data['assurance_pno']),
+        float(data['frais_compta']), int(data['vacance_semaines']), float(data['apport']),
+        float(data['taux_credit']), int(data['duree_credit']), float(data['irl_annuel']),
+        float(data['part_terrain_pct']), int(prop_id)
     )
     if client:
         client.execute(query, params)
