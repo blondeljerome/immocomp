@@ -108,7 +108,7 @@ if not df.empty:
 
     st.markdown("---")
 
-    # 2. Graphiques
+    # 2. Graphiques Globaux
     st.subheader("📊 Comparatif Global")
     col_chart1, col_chart2 = st.columns(2)
     with col_chart1:
@@ -123,24 +123,28 @@ if not df.empty:
 
     st.markdown("---")
 
-    # 3. Graphiques détaillés
+    # 3. GRAPHIQUES AGRANDIS : ÉVOLUTION DU CASH-FLOW SUR 20 ANS
     st.subheader("📈 Évolution et Détails du Cash-Flow sur 20 Ans")
-    tab1, tab2 = st.columns(2)
-    with tab1:
-        fig_cf_annuel = px.line(
-            df_cf_details, x="Annee", y="CashFlow_Annuel", color="Bien", markers=True,
-            title="Évolution du Cash-Flow Annuel (€)", labels={"Annee": "Année", "CashFlow_Annuel": "Cash-Flow Annuel (€)"}
-        )
-        fig_cf_annuel.update_layout(hovermode="x unified")
-        st.plotly_chart(fig_cf_annuel, use_container_width=True)
+    
+    # Graphique 1 : Cash-Flow Annuel (Pleine Largeur & Hauteur 600px)
+    fig_cf_annuel = px.line(
+        df_cf_details, x="Annee", y="CashFlow_Annuel", color="Bien", markers=True,
+        title="Évolution du Cash-Flow Annuel par Bien (€)",
+        labels={"Annee": "Année", "CashFlow_Annuel": "Cash-Flow Annuel (€)"},
+        height=600
+    )
+    fig_cf_annuel.update_layout(hovermode="x unified")
+    st.plotly_chart(fig_cf_annuel, use_container_width=True)
 
-    with tab2:
-        fig_cf_cumule = px.line(
-            df_cf_details, x="Annee", y="CashFlow_Cumule", color="Bien", markers=True,
-            title="Progression du Cash-Flow Cumulé (€)", labels={"Annee": "Année", "CashFlow_Cumule": "Cumul (€)"}
-        )
-        fig_cf_cumule.update_layout(hovermode="x unified")
-        st.plotly_chart(fig_cf_cumule, use_container_width=True)
+    # Graphique 2 : Cash-Flow Cumulé (Pleine Largeur & Hauteur 600px)
+    fig_cf_cumule = px.line(
+        df_cf_details, x="Annee", y="CashFlow_Cumule", color="Bien", markers=True,
+        title="Progression du Cash-Flow Cumulé sur 20 Ans (€)",
+        labels={"Annee": "Année", "CashFlow_Cumule": "Cumul (€)"},
+        height=600
+    )
+    fig_cf_cumule.update_layout(hovermode="x unified")
+    st.plotly_chart(fig_cf_cumule, use_container_width=True)
 
     st.markdown("---")
 
@@ -173,7 +177,6 @@ if not df.empty:
         selected_edit_label = st.selectbox("Choisir le bien à modifier", options=list(options_dict.keys()), key="select_edit")
         edit_id = options_dict[selected_edit_label]
         
-        # Récupération des données actuelles du bien sélectionné
         bien = df[df['id'] == edit_id].iloc[0]
         
         with st.form("edit_form"):
