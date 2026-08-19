@@ -13,7 +13,7 @@ st.title("🏠 Real Estate Analyzer & Comparateur 20 Ans")
 # --- CALCULS FINANCIERS ---
 def calculate_metrics(df):
     if df.empty:
-        return df
+        return df, pd.DataFrame()
     
     # Coût total
     df['cout_total'] = df['prix_achat'] + df['frais_notaire'] + df['travaux']
@@ -35,20 +35,33 @@ def calculate_metrics(df):
     df['renta_nette'] = ((df['loyer_mensuel'] * 12) - df['charges_annuelles'] - df['taxe_fonciere']) / df['cout_total'] * 100
     df['cash_flow_mois'] = df['loyer_mensuel'] - df['mensualite'] - (df['charges_annuelles'] / 12) - (df['taxe_fonciere'] / 12)
     
-    # Projection 20 Ans avec IRL
+    # Calcul détaillé sur 20 ans
+    cf_yearly_list = []
+    
     def cf_cumule_20ans(row):
         total_cf = 0
+        cumul_acc = 0
         for y in range(1, 21):
             loyer_y = (row['loyer_mensuel'] * 12) * ((1 + row['irl_annuel'] / 100) ** (y - 1))
             cf_y = loyer_y - (row['mensualite'] * 12) - row['charges_annuelles'] - row['taxe_fonciere']
             total_cf += cf_y
+            cumul_acc += cf_y
+            
+            cf_yearly_list.append({
+                "Annee": y,
+                "Bien": f"ID {row['id']} - {row['nom']}",
+                "CashFlow_Annuel": cf_y,
+                "CashFlow_Cumule": cumul_acc
+            })
         return total_cf
 
     df['cf_cumule_20ans'] = df.apply(cf_cumule_20ans, axis=1)
-    return df
+    df_cf_details = pd.DataFrame(cf_yearly_list)
+    
+    return df, df_cf_details
 
 df_raw = load_properties()
-df = calculate_metrics(df_raw)
+df, df_cf_details = calculate_metrics(df_raw)
 
 # --- MENU LATÉRAL (FORMULAIRE DE SAISIE) ---
 st.sidebar.header("➕ Ajouter un Bien")
@@ -95,7 +108,8 @@ if not df.empty:
 
     st.markdown("---")
 
-    # 2. Graphiques
+    # 2. Graphiques Globaux
+    st.subheader("📊 Comparatif Global")
     col_chart1, col_chart2 = st.columns(2)
     with col_chart1:
         fig1 = px.bar(df, x="nom", y="renta_nette", color="renta_nette", 
@@ -107,8 +121,42 @@ if not df.empty:
                       title="Cash-Flow Cumulé sur 20 Ans avec IRL (€)", labels={"nom": "Bien", "cf_cumule_20ans": "CF 20 Ans (€)"})
         st.plotly_chart(fig2, use_container_width=True)
 
-    # 3. Tableau complet des biens
-    st.subheader("📊 Classement et Détails des Biens")
+    st.markdown("---")
+
+    # 3. GRAPHES DÉTAILLÉS : ÉVOLUTION DU CASH-FLOW SUR 20 ANS
+    st.subheader("📈 Évolution et Détails du Cash-Flow sur 20 Ans")
+    
+    tab1, tab2 = st.columns(2)
+    with tab1:
+        fig_cf_annuel = px.line(
+            df_cf_details,
+            x="Annee",
+            y="CashFlow_Annuel",
+            color="Bien",
+            markers=True,
+            title="Évolution du Cash-Flow Annuel (€)",
+            labels={"Annee": "Année", "CashFlow_Annuel": "Cash-Flow Annuel (€)"}
+        )
+        fig_cf_annuel.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_cf_annuel, use_container_width=True)
+
+    with tab2:
+        fig_cf_cumule = px.line(
+            df_cf_details,
+            x="Annee",
+            y="CashFlow_Cumule",
+            color="Bien",
+            markers=True,
+            title="Progression du Cash-Flow Cumulé (€)",
+            labels={"Annee": "Année", "CashFlow_Cumule": "Cumul (€)"}
+        )
+        fig_cf_cumule.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_cf_cumule, use_container_width=True)
+
+    st.markdown("---")
+
+    # 4. Tableau complet des biens
+    st.subheader("📋 Classement et Détails des Biens")
     st.dataframe(
         df[["id", "nom", "ville", "prix_achat", "cout_total", "loyer_mensuel", "renta_brute", "renta_nette", "cash_flow_mois", "cf_cumule_20ans"]],
         column_config={
@@ -124,16 +172,15 @@ if not df.empty:
         use_container_width=True
     )
 
-    # --- SECTION SUPPRESSION (CORRIGÉE) ---
+    # 5. Section Suppression
     with st.expander("🗑️ Supprimer un bien"):
-        # Création d'un dictionnaire lisible { "ID - Nom du bien": ID }
         options_dict = {f"ID {row['id']} - {row['nom']} ({row['ville']})": int(row['id']) for _, row in df.iterrows()}
         selected_label = st.selectbox("Choisir le bien à supprimer", options=list(options_dict.keys()))
         
         if st.button("Confirmer la suppression", type="primary"):
             id_to_del = options_dict[selected_label]
             delete_property(id_to_del)
-            st.success(f"Bien supprimé avec succès.")
+            st.success("Bien supprimé avec succès.")
             st.rerun()
 else:
     st.info("Aucun bien enregistré pour le moment. Utilisez le panneau latéral pour en ajouter.")
