@@ -1,23 +1,31 @@
 import os
 import sqlite3
-import libsql_experimental as libsql
+import pandas as pd
+import streamlit as st
+import libsql_client
 
-def get_connection():
-    # Détection des identifiants cloud
-    url = os.getenv("TURSO_DATABASE_URL")
-    auth_token = os.getenv("TURSO_AUTH_TOKEN")
-    
+def get_turso_client():
+    """Vérifie si les clés Turso sont présentes et retourne un client Turso, sinon None."""
+    url = None
+    auth_token = None
+
+    if "TURSO_DATABASE_URL" in st.secrets and "TURSO_AUTH_TOKEN" in st.secrets:
+        url = st.secrets["TURSO_DATABASE_URL"]
+        auth_token = st.secrets["TURSO_AUTH_TOKEN"]
+    elif os.getenv("TURSO_DATABASE_URL") and os.getenv("TURSO_AUTH_TOKEN"):
+        url = os.getenv("TURSO_DATABASE_URL")
+        auth_token = os.getenv("TURSO_AUTH_TOKEN")
+
     if url and auth_token:
-        # Connexion à Turso (Cloud)
-        return libsql.connect(database=url, auth_token=auth_token)
-    else:
-        # Connexion locale de secours (SQLite local)
-        return sqlite3.connect("database.db")
+        # Convertit 'libsql://' en 'https://' si nécessaire pour libsql-client
+        if url.startswith("libsql://"):
+            url = url.replace("libsql://", "https://")
+        return libsql_client.create_client_sync(url=url, auth_token=auth_token)
+    return None
 
 def init_db():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
+    client = get_turso_client()
+    query = '''
         CREATE TABLE IF NOT EXISTS properties (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nom TEXT NOT NULL,
@@ -33,35 +41,60 @@ def init_db():
             duree_credit INTEGER,
             irl_annuel REAL
         )
-    ''')
-    conn.commit()
-    conn.close()
+    '''
+    if client:
+        client.execute(query)
+        client.close()
+    else:
+        conn = sqlite3.connect("database.db")
+        conn.execute(query)
+        conn.commit()
+        conn.close()
 
 def load_properties():
-    conn = get_connection()
-    import pandas as pd
-    df = pd.read_sql_query("SELECT * FROM properties", conn)
-    conn.close()
-    return df
+    client = get_turso_client()
+    if client:
+        rs = client.execute("SELECT * FROM properties")
+        client.close()
+        # Conversion des résultats Turso en DataFrame Pandas
+        columns = rs.columns
+        rows = [list(r) for r in rs.rows]
+        return pd.DataFrame(rows, columns=columns)
+    else:
+        conn = sqlite3.connect("database.db")
+        df = pd.read_sql_query("SELECT * FROM properties", conn)
+        conn.close()
+        return df
 
 def save_property(data):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
+    client = get_turso_client()
+    query = '''
         INSERT INTO properties (nom, ville, prix_achat, frais_notaire, travaux, loyer_mensuel, charges_annuelles, taxe_fonciere, apport, taux_credit, duree_credit, irl_annuel)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
+    '''
+    params = (
         data['nom'], data['ville'], data['prix_achat'], data['frais_notaire'],
         data['travaux'], data['loyer_mensuel'], data['charges_annuelles'],
         data['taxe_fonciere'], data['apport'], data['taux_credit'],
         data['duree_credit'], data['irl_annuel']
-    ))
-    conn.commit()
-    conn.close()
+    )
+    if client:
+        client.execute(query, params)
+        client.close()
+    else:
+        conn = sqlite3.connect("database.db")
+        conn.execute(query, params)
+        conn.commit()
+        conn.close()
 
 def delete_property(prop_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM properties WHERE id = ?", (prop_id,))
-    conn.commit()
-    conn.close()
+    client = get_turso_client()
+    query = "DELETE FROM properties WHERE id = ?"
+    if client:
+        client.execute(query, (prop_id,))
+        client.close()
+    else:
+        conn = sqlite3.connect("database.db")
+        conn.execute(query, (prop_id,))
+        conn.commit()
+        conn.close()
