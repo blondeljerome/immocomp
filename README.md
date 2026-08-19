@@ -1,6 +1,6 @@
-# 🏢 Immocomp - Comparateur & Simulateur d'Investissement Immobilier en SCI à l'IS
+# 🏢 Immocomp - Comparateur & Simulateur d'Investissement Immobilier en SCI à l'IS (30 Ans)
 
-**Immocomp** est une application web interactive d'aide à la décision financière pour investisseurs immobiliers. Elle permet de simuler, comparer et projeter la rentabilité et la trésorerie nette de biens immobiliers (notamment des studios / appartements locatifs) détenus au sein d'une **Société Civile Immobilière soumise à l'Impôt sur les Sociétés (SCI à l'IS)** sur un horizon de **20 ans**.
+**Immocomp** est une application web interactive d'aide à la décision financière pour investisseurs immobiliers. Elle permet de simuler, comparer et projeter la rentabilité et la trésorerie nette de biens immobiliers (notamment des studios / appartements locatifs) détenus au sein d'une **Société Civile Immobilière soumise à l'Impôt sur les Sociétés (SCI à l'IS)** sur un horizon de **30 ans**.
 
 ---
 
@@ -13,9 +13,9 @@
    - [4. Amortissements fiscaux par composants (Règles SCI IS)](#4-amortissements-fiscaux-par-composants-règles-sci-is)
    - [5. Déductibilité des frais de notaire](#5-déductibilité-des-frais-de-notaire)
    - [6. Résultat fiscal, report de déficit & Impôt sur les Sociétés (IS)](#6-résultat-fiscal-report-de-déficit--impôt-sur-les-sociétés-is)
-   - [7. Trésorerie réelle (Cash-Flow) de la SCI](#7-trésorerie-réelle-cash-flow-de-la-sci)
+   - [7. Trésorerie réelle (Cash-Flow) de la SCI sur 30 ans](#7-trésorerie-réelle-cash-flow-de-la-sci-sur-30-ans)
    - [8. Indicateurs de performance (KPIs)](#8-indicateurs-de-performance-kpis)
-3. [Fonctionnalités de l'Application](#-fonctionnalités-de-lapplication)
+3. [Fonctionnalités & Interface par Onglets](#-fonctionnalités--interface-par-onglets)
 4. [Architecture Technique & Stack](#-architecture-technique--stack)
 5. [Structure de la Base de Données](#-structure-de-la-base-de-données)
 6. [Installation & Lancement](#-installation--lancement)
@@ -33,7 +33,7 @@ Le choix de la **SCI à l'IS** permet :
 - **De bénéficier d'un taux réduit d'IS à 15%** (sur la tranche de bénéfice inférieure à 42 500 €).
 - **D'accumuler et réinvestir la trésorerie brute** au sein de la société sans frottement fiscal personnel immédiat.
 
-**Immocomp modélise précisément cette réalité comptable et fiscale française année par année sur 20 ans.**
+**Immocomp modélise précisément cette réalité comptable et fiscale française année par année sur 30 ans.**
 
 ---
 
@@ -54,13 +54,13 @@ Pour un emprunt de capital $P$, avec un taux d'intérêt annuel $T$ (soit un tau
 
 $$M = P \times \frac{r \cdot (1 + r)^n}{(1 + r)^n - 1}$$
 
-Chaque année, l'application décompose les 12 mensualités entre la part d'**intérêts déductibles** et le **remboursement du capital**, en mettant à jour le capital restant dû.
+Chaque année, l'application décompose les mensualités entre la part d'**intérêts déductibles** et le **remboursement du capital**. Dès que le prêt est intégralement remboursé (par exemple après 20 ou 25 ans), le remboursement annuel tombe à **$0\ \text{€}$**, libérant un cash-flow significatif pour les années suivantes.
 
 ---
 
 ### 2. Revenus locatifs & Indexation (IRL)
 
-Pour chaque année $y \in [1, 20]$ :
+Pour chaque année $y \in [1, 30]$ :
 - **Vacance locative** : Prise en compte du nombre de semaines de vacance par an :
   $$\text{Mois loués par an} = 12 - \left(\frac{\text{Vacance (semaines)}}{4.33}\right)$$
 - **Indexation annuelle des loyers (IRL)** :
@@ -82,11 +82,11 @@ Contrairement aux particuliers au régime micro-foncier ou réel foncier, la SCI
 | Composant | Assiette de calcul | Durée d'amortissement | Amortissement annuel | Période d'application |
 | :--- | :--- | :--- | :--- | :--- |
 | **Terrain (non amortissable)** | % Part Terrain (défaut : 15%) appliqué au Prix d'Achat | $\infty$ | $0\ \text{€}$ | - |
-| **Bâti / Structure** | $\text{Prix d'Achat} \times (1 - \text{Part Terrain})$ | **30 ans** | $\frac{\text{Valeur Bâti}}{30}$ | Années 1 à 20 |
+| **Bâti / Structure** | $\text{Prix d'Achat} \times (1 - \text{Part Terrain})$ | **30 ans** | $\frac{\text{Valeur Bâti}}{30}$ | Années 1 à 30 |
 | **Travaux / Rénovations** | Montant des travaux | **10 ans** | $\frac{\text{Travaux}}{10}$ | Années 1 à 10 ($0$ après) |
 | **Mobilier / Équipements** | Montant des meubles | **5 ans** | $\frac{\text{Meubles}}{5}$ | Années 1 à 5 ($0$ après) |
 
-$$\text{Amortissement Annuel}_y = \text{Amortissement Bâti} + \mathbb{I}_{\{y \le 10\}} \text{Amort. Travaux} + \mathbb{I}_{\{y \le 5\}} \text{Amort. Meubles}$$
+$$\text{Amortissement Annuel}_y = \mathbb{I}_{\{y \le 30\}} \text{Amort. Bâti} + \mathbb{I}_{\{y \le 10\}} \text{Amort. Travaux} + \mathbb{I}_{\{y \le 5\}} \text{Amort. Meubles}$$
 
 ---
 
@@ -99,7 +99,7 @@ $$\text{Frais Notaire Déduits}_y = \begin{cases} \text{Frais de Notaire} & \tex
 
 ### 6. Résultat fiscal, report de déficit & Impôt sur les Sociétés (IS)
 
-Pour chaque année $y$ :
+Pour chaque année $y \in [1, 30]$ :
 
 1. **Résultat fiscal brut de l'exercice** :
    $$\text{Résultat Brut}_y = \text{Loyer Annuel Brut}_y - \text{Charges Exploitation} - \text{Intérêts Emprunt}_y - \text{Amortissements}_y - \text{Frais Notaire Déduits}_y$$
@@ -117,11 +117,11 @@ Pour chaque année $y$ :
 
 ---
 
-### 7. Trésorerie réelle (Cash-Flow) de la SCI
+### 7. Trésorerie réelle (Cash-Flow) de la SCI sur 30 ans
 
 Le cash-flow net représente l'argent liquide réellement généré et conservé sur le compte bancaire de la SCI :
 
-$$\text{Cash-Flow Net Annuel}_y = \text{Loyer Annuel Brut}_y - \text{Charges Exploitation} - (\text{Mensualité Crédit} \times 12) - \text{Impôt IS}_y$$
+$$\text{Cash-Flow Net Annuel}_y = \text{Loyer Annuel Brut}_y - \text{Charges Exploitation} - \text{Remboursement Emprunt Annuel}_y - \text{Impôt IS}_y$$
 
 $$\text{Cash-Flow Cumulé}_y = \sum_{t=1}^{y} \text{Cash-Flow Net Annuel}_t$$
 
@@ -135,28 +135,29 @@ $$\text{Cash-Flow Cumulé}_y = \sum_{t=1}^{y} \text{Cash-Flow Net Annuel}_t$$
   $$\text{Renta Nette} = \frac{\text{Loyer Brut A1} - \text{Charges d'exploitation}}{\text{Coût Total Projet}} \times 100$$
 - **Cash-Flow Mensuel Moyen (Année 1)** :
   $$\text{CF Mensuel A1} = \frac{\text{Cash-Flow Net Annuel}_1}{12}$$
-- **Cash-Flow Cumulé à 20 ans** :
-  $$\text{CF Cumulé 20 ans} = \text{Cash-Flow Cumulé}_{20}$$
+- **Trésorerie Cumulée à 30 ans** :
+  $$\text{Trésorerie Cumulée 30 ans} = \text{Cash-Flow Cumulé}_{30}$$
 
 ---
 
-## 🖥️ Fonctionnalités de l'Application
+## 🖥️ Fonctionnalités & Interface par Onglets
 
-1. **Tableau de Bord Exécutif & Métriques Clés** :
-   - Cartes KPI récapitulatives : Meilleure rentabilité nette, meilleur cash-flow mensuel (A1), moyenne globale, et trésorerie cumulée maximale à 20 ans.
-2. **Visualisations Comparatives Interactives (Plotly)** :
-   - Histogramme comparatif des rentabilités nettes par studio.
-   - Histogramme comparatif de la trésorerie cumulée à 20 ans.
-   - Graphique linéaire d'évolution de la **trésorerie annuelle** après IS sur 20 ans pour chaque bien.
-   - Graphique linéaire de la **trésorerie cumulée** sur 20 ans.
-3. **Audit Fiscal Détaillé (Déficits & IS)** :
-   - Tableau déroulant affichant pour chaque année : Cash-flow net, impôt IS payé, et solde du déficit fiscal reporté.
-4. **Tableau Synthétique Global** :
-   - Vue tabulaire complète des biens enregistrés avec mise en forme des montants monétaires et pourcentages.
-5. **Gestion CRUD Complète (Création, Lecture, Modification, Suppression)** :
-   - *Ajout* via un formulaire latéral ergonomique avec des valeurs par défaut réalistes.
-   - *Modification* dynamique des paramètres de n'importe quel studio.
-   - *Suppression* sécurisée avec confirmation.
+1. **Tableau de Bord & Cartes KPI Stylisées** :
+   - Meilleure rentabilité nette, meilleur cash-flow mensuel (A1), moyenne globale, et trésorerie cumulée maximale à 30 ans.
+2. **Onglet 1 : 📊 Synthèse & Comparatif** :
+   - Histogrammes comparatifs (Renta Nette et Trésorerie 30 ans).
+   - Tableau récapitulatif détaillé avec mise en forme dynamique.
+3. **Onglet 2 : 📈 Projections & Trésorerie 30 Ans** :
+   - Sélecteur de bien individuel ou vue globale multi-biens.
+   - Graphique linéaire de la trésorerie annuelle nette après IS.
+   - Graphique linéaire de la trésorerie cumulée sur 30 ans.
+4. **Onglet 3 : 📑 Fiscalité IS & Amortissements** :
+   - Liasse fiscale détaillée (Loyers, Charges, Intérêts, Amortissements, Résultat fiscal, Déficits, IS, Capital restant dû).
+   - Bouton de téléchargement de l'ensemble des projections en **CSV**.
+5. **Onglet 4 : ⚙️ Gestion des Biens & Scénarios** :
+   - Édition et mise à jour dynamique.
+   - **Clonage / Duplication en 1 clic** pour tester des variantes de scénarios (négociation, travaux, taux).
+   - Suppression sécurisée.
 
 ---
 
@@ -164,8 +165,8 @@ $$\text{Cash-Flow Cumulé}_y = \sum_{t=1}^{y} \text{Cash-Flow Net Annuel}_t$$
 
 ```
 immocomp/
-├── app.py              # Application Streamlit principale (UI, calculs financiers, graphiques Plotly)
-├── database.py         # Couche d'accès aux données (SQLite local ou Turso Cloud, migrations)
+├── app.py              # Application Streamlit principale (UI moderne, calculs 30 ans, graphiques Plotly)
+├── database.py         # Couche d'accès aux données (SQLite local ou Turso Cloud, duplication, migrations)
 ├── requirements.txt    # Dépendances Python du projet
 └── .streamlit/
     └── secrets.toml    # (Optionnel) Clés de connexion Turso Database en production
@@ -174,7 +175,7 @@ immocomp/
 - **Langage** : Python 3.9+
 - **Interface Utilisateur** : [Streamlit](https://streamlit.io/)
 - **Calculs Numériques & Données** : [Pandas](https://pandas.pydata.org/) & [NumPy](https://numpy.org/)
-- **Visualisations Graphiques** : [Plotly Express](https://plotly.com/python/plotly-express/)
+- **Visualisations Graphiques** : [Plotly Express](https://plotly.com/python/plotly-express/) & Graph Objects
 - **Base de Données Hybride** :
   - **Local** : SQLite (`database.db`) par défaut (sans configuration requise).
   - **Cloud / Production** : [Turso](https://turso.tech/) (`libsql-client`) via variables d'environnement ou `secrets.toml`.
@@ -202,7 +203,7 @@ La table `properties` stocke toutes les caractéristiques d'un projet immobilier
 | `vacance_semaines`| `INTEGER`| Semaines de vacance locative estimées par an |
 | `apport` | `REAL` | Apport personnel en capital (€) |
 | `taux_credit` | `REAL` | Taux d'intérêt annuel du crédit immobilier (%) |
-| `duree_credit` | `INTEGER`| Durée de l'emprunt (années) |
+| `duree_credit` | `INTEGER`| Durée de l'emprunt (années, max 30 ans) |
 | `irl_annuel` | `REAL` | Indexation prévisionnelle annuelle des loyers (%) |
 | `part_terrain_pct`| `REAL` | Quote-part du terrain non amortissable (%) |
 
@@ -233,12 +234,3 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 L'application sera automatiquement accessible dans votre navigateur à l'adresse `http://localhost:8501`.
-
-### 4. (Optionnel) Configuration Base de Données Cloud (Turso)
-Pour utiliser une base de données cloud distribuée Turso, configurez les variables d'environnement ou ajoutez le fichier `.streamlit/secrets.toml` :
-
-```toml
-TURSO_DATABASE_URL = "libsql://votre-base-turso.turso.io"
-TURSO_AUTH_TOKEN = "votre_token_secret"
-```
-Si ces variables ne sont pas renseignées, l'application utilise automatiquement le fichier SQLite local `database.db`.

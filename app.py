@@ -7,7 +7,7 @@ from database import init_db, load_properties, save_property, update_property, d
 
 # --- Configuration de la page ---
 st.set_page_config(
-    page_title="Immocomp | Simulateur SCI à l'IS",
+    page_title="Immocomp | Simulateur SCI à l'IS (30 Ans)",
     page_icon="🏢",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -183,7 +183,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- MOTEUR DE CALCUL FINANCIER & FISCAL (SCI À L'IS) ---
+# --- MOTEUR DE CALCUL FINANCIER & FISCAL (SCI À L'IS SUR 30 ANS) ---
 def calculate_metrics_sci_is(df):
     if df.empty:
         return df, pd.DataFrame()
@@ -203,7 +203,7 @@ def calculate_metrics_sci_is(df):
 
     cf_yearly_list = []
 
-    def process_20y_sci(row):
+    def process_30y_sci(row):
         # 1. Amortissements Fiscaux conformes
         valeur_bati = row['prix_achat'] * (1 - row['part_terrain_pct'] / 100)
         amort_bati_annuel = valeur_bati / 30.0  # Bâti : 30 ans
@@ -217,17 +217,19 @@ def calculate_metrics_sci_is(df):
         cumul_cf = 0
         deficit_reportable = 0.0
 
-        for y in range(1, 21):
+        for y in range(1, 31):
             interets_annee = 0
             capital_amorti_annee = 0
             for _ in range(12):
-                if solde_capital > 0:
+                if solde_capital > 0.01:
                     i_mois = solde_capital * taux_mensuel
                     c_mois = row['mensualite_credit'] - i_mois
+                    if c_mois > solde_capital:
+                        c_mois = solde_capital
                     interets_annee += i_mois
                     capital_amorti_annee += c_mois
                     solde_capital -= c_mois
-                    if solde_capital < 0:
+                    if solde_capital < 0.01:
                         solde_capital = 0
 
             # Prise en compte de la vacance locative et indexation IRL
@@ -238,7 +240,7 @@ def calculate_metrics_sci_is(df):
             charges_exploit = row['charges_annuelles'] + row['taxe_fonciere'] + row['assurance_pno'] + row['frais_compta']
             
             # Amortissements fiscaux applicables cette année
-            amort_actuel = amort_bati_annuel
+            amort_actuel = amort_bati_annuel if y <= 30 else 0.0
             if y <= 10:
                 amort_actuel += amort_travaux_annuel
             if y <= 5:
@@ -260,8 +262,9 @@ def calculate_metrics_sci_is(df):
                 impot_is = 0.0
                 deficit_reportable = abs(resultat_apres_deficit)
 
-            # Cash-Flow Trésorerie Réelle
-            cf_tresorerie_annee = loyer_annuel_brut - charges_exploit - (row['mensualite_credit'] * 12) - impot_is
+            # Cash-Flow Trésorerie Réelle (remboursement réel de l'année : 0 après extinction du prêt)
+            remboursement_credit_annee = interets_annee + capital_amorti_annee
+            cf_tresorerie_annee = loyer_annuel_brut - charges_exploit - remboursement_credit_annee - impot_is
             total_cf_apres_is += cf_tresorerie_annee
             cumul_cf += cf_tresorerie_annee
 
@@ -284,7 +287,8 @@ def calculate_metrics_sci_is(df):
 
         return total_cf_apres_is
 
-    df['cf_20ans_apres_is'] = df.apply(process_20y_sci, axis=1)
+    df['cf_30ans_apres_is'] = df.apply(process_30y_sci, axis=1)
+    df['cf_20ans_apres_is'] = df['cf_30ans_apres_is']  # Rétrocompatibilité
     df_cf_details = pd.DataFrame(cf_yearly_list)
 
     # Calculs pour l'Année 1
@@ -306,7 +310,7 @@ df, df_cf_details = calculate_metrics_sci_is(df_raw)
 # --- MENU LATÉRAL : AJOUT D'UN BIEN ---
 with st.sidebar:
     st.markdown("### 🏢 **Immocomp**")
-    st.caption("Simulateur d'investissement locatif en SCI à l'IS")
+    st.caption("Simulateur d'investissement locatif en SCI à l'IS (30 Ans)")
     st.markdown("---")
     
     st.markdown("#### ➕ Ajouter un Nouveau Studio")
@@ -369,6 +373,7 @@ with st.sidebar:
     st.markdown("""
     <div style="font-size: 0.78rem; color: #64748B; line-height: 1.4;">
         💡 <strong>Règles SCI IS appliquées :</strong><br>
+        • Horizon de projection : <strong>30 ans</strong><br>
         • Amortissement Bâti : 30 ans<br>
         • Amortissement Travaux : 10 ans<br>
         • Amortissement Meubles : 5 ans<br>
@@ -384,7 +389,7 @@ st.markdown(f"""
 <div class="main-header">
     <div>
         <h1>🏢 Immocomp • Simulateur & Comparateur SCI à l'IS</h1>
-        <p>Analyse financière, comptabilité analytique et projection de trésorerie sur 20 ans</p>
+        <p>Analyse financière, comptabilité analytique et projection de trésorerie sur 30 ans</p>
     </div>
     <div>
         <span class="header-badge">{nb_studios} bien{'s' if nb_studios > 1 else ''} sous étude</span>
@@ -400,7 +405,7 @@ else:
     # 1. Cartes KPI Modernes en haut de page
     best_renta_row = df.loc[df['renta_nette'].idxmax()]
     best_cf_row = df.loc[df['cf_mensuel_y1_is'].idxmax()]
-    max_cumul_row = df.loc[df['cf_20ans_apres_is'].idxmax()]
+    max_cumul_row = df.loc[df['cf_30ans_apres_is'].idxmax()]
 
     st.markdown(f"""
     <div class="kpi-container">
@@ -420,8 +425,8 @@ else:
             <div class="kpi-subtitle">Sur {len(df)} bien{'s' if len(df) > 1 else ''} analysé{'s' if len(df) > 1 else ''}</div>
         </div>
         <div class="kpi-card warning">
-            <div class="kpi-title">💰 Max Trésorerie Cumulée 20 Ans</div>
-            <div class="kpi-value">{df['cf_20ans_apres_is'].max():,.0f} €</div>
+            <div class="kpi-title">💰 Max Trésorerie Cumulée 30 Ans</div>
+            <div class="kpi-value">{df['cf_30ans_apres_is'].max():,.0f} €</div>
             <div class="kpi-subtitle">Top : {max_cumul_row['nom']}</div>
         </div>
     </div>
@@ -430,7 +435,7 @@ else:
     # 2. Structure par Onglets Thématiques
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 Synthèse & Comparatif",
-        "📈 Projections & Trésorerie 20 Ans",
+        "📈 Projections & Trésorerie 30 Ans",
         "📑 Fiscalité IS & Amortissements",
         "⚙️ Gestion des Biens & Scénarios"
     ])
@@ -462,10 +467,10 @@ else:
 
         with c_chart2:
             fig2 = px.bar(
-                df, x="nom", y="cf_20ans_apres_is", color="cf_20ans_apres_is",
+                df, x="nom", y="cf_30ans_apres_is", color="cf_30ans_apres_is",
                 color_continuous_scale="Tealgrn",
-                labels={"nom": "Studio", "cf_20ans_apres_is": "Trésorerie Cumulée (€)"},
-                title="<b>Trésorerie Réelle Cumulée à 20 Ans (€)</b>",
+                labels={"nom": "Studio", "cf_30ans_apres_is": "Trésorerie Cumulée (€)"},
+                title="<b>Trésorerie Réelle Cumulée à 30 Ans (€)</b>",
                 text_auto=',.0f'
             )
             fig2.update_layout(
@@ -486,7 +491,7 @@ else:
             df[[
                 "nom", "ville", "prix_achat", "cout_projet", "apport", 
                 "loyer_mensuel", "mensualite_credit", "renta_brute", 
-                "renta_nette", "cf_mensuel_y1_is", "cf_20ans_apres_is"
+                "renta_nette", "cf_mensuel_y1_is", "cf_30ans_apres_is"
             ]],
             column_config={
                 "nom": st.column_config.TextColumn("Studio", width="medium"),
@@ -499,17 +504,17 @@ else:
                 "renta_brute": st.column_config.NumberColumn("Renta Brute", format="%.2f %%"),
                 "renta_nette": st.column_config.NumberColumn("Renta Nette", format="%.2f %%"),
                 "cf_mensuel_y1_is": st.column_config.NumberColumn("Cash-Flow A1 (IS)", format="%+.0f €/m"),
-                "cf_20ans_apres_is": st.column_config.NumberColumn("Trésorerie 20 ans", format="%.0f €")
+                "cf_30ans_apres_is": st.column_config.NumberColumn("Trésorerie 30 ans", format="%.0f €")
             },
             use_container_width=True,
             hide_index=True
         )
 
     # =========================================================================
-    # ONGLET 2 : PROJECTIONS & TRÉSORERIE 20 ANS
+    # ONGLET 2 : PROJECTIONS & TRÉSORERIE 30 ANS
     # =========================================================================
     with tab2:
-        st.markdown("#### 📈 Évolution Pluriannuelle de la Trésorerie (20 Ans)")
+        st.markdown("#### 📈 Évolution Pluriannuelle de la Trésorerie (30 Ans)")
         
         # Filtre interactif par bien
         biens_dispos = ["Tous les biens"] + df_cf_details["Bien"].unique().tolist()
@@ -532,7 +537,7 @@ else:
             fig_annuel.update_layout(
                 plot_bgcolor="white", paper_bgcolor="white",
                 legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
-                xaxis=dict(dtick=2, gridcolor="#F1F5F9"),
+                xaxis=dict(dtick=5, gridcolor="#F1F5F9"),
                 yaxis=dict(gridcolor="#F1F5F9")
             )
             st.plotly_chart(fig_annuel, use_container_width=True)
@@ -548,14 +553,17 @@ else:
             fig_cumul.update_layout(
                 plot_bgcolor="white", paper_bgcolor="white",
                 legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
-                xaxis=dict(dtick=2, gridcolor="#F1F5F9"),
+                xaxis=dict(dtick=5, gridcolor="#F1F5F9"),
                 yaxis=dict(gridcolor="#F1F5F9")
             )
             st.plotly_chart(fig_cumul, use_container_width=True)
 
         st.markdown("""
         <div class="info-box">
-            📌 <strong>Analyse de la courbe :</strong> La trésorerie annuelle progresse au fil des ans grâce à l'indexation annuelle des loyers (IRL) et à l'amortissement du crédit bancaire (diminution des intérêts déductibles). L'arrêt de l'amortissement des meubles à $N=5$ ans et des travaux à $N=10$ ans marque des paliers d'imposition IS progressifs.
+            📌 <strong>Analyse de la courbe sur 30 ans :</strong><br>
+            • <strong>Années 1 à 5/10 :</strong> Trésorerie optimisée par la déduction des meubles (5 ans), des travaux (10 ans) et des frais de notaire (A1).<br>
+            • <strong>Année d'extinction du crédit (ex: 20 ans) :</strong> Le remboursement d'emprunt tombe à 0 €, ce qui génère une <strong>forte hausse du cash-flow annuel net</strong>.<br>
+            • <strong>Années 21 à 30 :</strong> Pleine perception des loyers réévalués (IRL) avec poursuite de l'amortissement du composant bâti jusqu'à 30 ans.
         </div>
         """, unsafe_allow_html=True)
 
@@ -567,7 +575,7 @@ else:
         
         st.markdown("""
         <div class="info-box">
-            💡 <strong>Mécanisme Fiscal de la SCI à l'IS :</strong><br>
+            💡 <strong>Mécanisme Fiscal de la SCI à l'IS sur 30 Ans :</strong><br>
             • <strong>Amortissements décomposés :</strong> Bâti (30 ans), Travaux (10 ans), Mobilier (5 ans).<br>
             • <strong>Frais de notaire :</strong> Passés en charge déductible immédiate en Année 1.<br>
             • <strong>Report indéfini des déficits :</strong> Aucun impôt n'est dû tant que le déficit fiscal cumulé n'a pas été entièrement absorbé.<br>
@@ -610,9 +618,9 @@ else:
         # Bouton d'export CSV
         csv_data = df_cf_details.to_csv(index=False, sep=";").encode("utf-8-sig")
         st.download_button(
-            label="📥 Télécharger les Projections 20 Ans (CSV)",
+            label="📥 Télécharger les Projections 30 Ans (CSV)",
             data=csv_data,
-            file_name="immocomp_projections_sci_is.csv",
+            file_name="immocomp_projections_sci_is_30ans.csv",
             mime="text/csv"
         )
 
