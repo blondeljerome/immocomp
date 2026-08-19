@@ -165,6 +165,37 @@ def update_property(prop_id, data):
         conn.commit()
         conn.close()
 
+def duplicate_property(prop_id, new_name=None):
+    client = get_turso_client()
+    if client:
+        rs = client.execute("SELECT * FROM properties WHERE id = ?", (prop_id,))
+        if rs.rows:
+            row_dict = dict(zip(rs.columns, rs.rows[0]))
+            del row_dict['id']
+            if new_name:
+                row_dict['nom'] = new_name
+            else:
+                row_dict['nom'] = f"{row_dict['nom']} (Copie)"
+            save_property(row_dict)
+        client.close()
+    else:
+        conn = sqlite3.connect("database.db")
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM properties WHERE id = ?", (prop_id,))
+        row = cursor.fetchone()
+        if row:
+            row_dict = dict(row)
+            del row_dict['id']
+            if new_name:
+                row_dict['nom'] = new_name
+            else:
+                row_dict['nom'] = f"{row_dict['nom']} (Copie)"
+            conn.close()
+            save_property(row_dict)
+        else:
+            conn.close()
+
 def delete_property(prop_id):
     client = get_turso_client()
     query = "DELETE FROM properties WHERE id = ?"
