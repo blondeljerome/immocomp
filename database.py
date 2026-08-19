@@ -3,9 +3,14 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 import libsql_client
+import ssl
+import certifi
+
+# Correctif SSL macOS
+ssl_context = ssl.create_default_context(cafile=certifi.where())
+ssl._create_default_https_context = lambda: ssl_context
 
 def get_turso_client():
-    """Vérifie si les clés Turso sont présentes et retourne un client Turso, sinon None."""
     url = None
     auth_token = None
 
@@ -17,7 +22,6 @@ def get_turso_client():
         auth_token = os.getenv("TURSO_AUTH_TOKEN")
 
     if url and auth_token:
-        # Convertit 'libsql://' en 'https://' si nécessaire pour libsql-client
         if url.startswith("libsql://"):
             url = url.replace("libsql://", "https://")
         return libsql_client.create_client_sync(url=url, auth_token=auth_token)
@@ -56,7 +60,6 @@ def load_properties():
     if client:
         rs = client.execute("SELECT * FROM properties")
         client.close()
-        # Conversion des résultats Turso en DataFrame Pandas
         columns = rs.columns
         rows = [list(r) for r in rs.rows]
         return pd.DataFrame(rows, columns=columns)
@@ -73,10 +76,35 @@ def save_property(data):
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     '''
     params = (
-        data['nom'], data['ville'], data['prix_achat'], data['frais_notaire'],
-        data['travaux'], data['loyer_mensuel'], data['charges_annuelles'],
-        data['taxe_fonciere'], data['apport'], data['taux_credit'],
-        data['duree_credit'], data['irl_annuel']
+        data['nom'], data['ville'], float(data['prix_achat']), float(data['frais_notaire']),
+        float(data['travaux']), float(data['loyer_mensuel']), float(data['charges_annuelles']),
+        float(data['taxe_fonciere']), float(data['apport']), float(data['taux_credit']),
+        int(data['duree_credit']), float(data['irl_annuel'])
+    )
+    if client:
+        client.execute(query, params)
+        client.close()
+    else:
+        conn = sqlite3.connect("database.db")
+        conn.execute(query, params)
+        conn.commit()
+        conn.close()
+
+def update_property(prop_id, data):
+    """Met à jour un bien existant grâce à son ID."""
+    client = get_turso_client()
+    query = '''
+        UPDATE properties
+        SET nom = ?, ville = ?, prix_achat = ?, frais_notaire = ?, travaux = ?,
+            loyer_mensuel = ?, charges_annuelles = ?, taxe_fonciere = ?, apport = ?,
+            taux_credit = ?, duree_credit = ?, irl_annuel = ?
+        WHERE id = ?
+    '''
+    params = (
+        data['nom'], data['ville'], float(data['prix_achat']), float(data['frais_notaire']),
+        float(data['travaux']), float(data['loyer_mensuel']), float(data['charges_annuelles']),
+        float(data['taxe_fonciere']), float(data['apport']), float(data['taux_credit']),
+        int(data['duree_credit']), float(data['irl_annuel']), int(prop_id)
     )
     if client:
         client.execute(query, params)

@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from database import init_db, load_properties, save_property, delete_property
+from database import init_db, load_properties, save_property, update_property, delete_property
 
 # Configuration de la page
 st.set_page_config(page_title="Comparateur Immobilier Pro", layout="wide")
@@ -63,7 +63,7 @@ def calculate_metrics(df):
 df_raw = load_properties()
 df, df_cf_details = calculate_metrics(df_raw)
 
-# --- MENU LATÉRAL (FORMULAIRE DE SAISIE) ---
+# --- MENU LATÉRAL (AJOUT D'UN BIEN) ---
 st.sidebar.header("➕ Ajouter un Bien")
 with st.sidebar.form("property_form", clear_on_submit=True):
     nom = st.text_input("Nom du bien (ex: T2 Hypercentre)")
@@ -97,9 +97,9 @@ with st.sidebar.form("property_form", clear_on_submit=True):
         st.success("Bien enregistré avec succès !")
         st.rerun()
 
-# --- TABLEAU DE BORD (DASHBOARD) ---
+# --- TABLEAU DE BORD ---
 if not df.empty:
-    # 1. Cartes KPIs
+    # 1. KPIs
     col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
     col_kpi1.metric("Meilleure Renta Nette", f"{df['renta_nette'].max():.2f} %")
     col_kpi2.metric("Max Cash-Flow / Mois", f"{df['cash_flow_mois'].max():.0f} €")
@@ -108,7 +108,7 @@ if not df.empty:
 
     st.markdown("---")
 
-    # 2. Graphiques Globaux
+    # 2. Graphiques
     st.subheader("📊 Comparatif Global")
     col_chart1, col_chart2 = st.columns(2)
     with col_chart1:
@@ -123,39 +123,28 @@ if not df.empty:
 
     st.markdown("---")
 
-    # 3. GRAPHES DÉTAILLÉS : ÉVOLUTION DU CASH-FLOW SUR 20 ANS
+    # 3. Graphiques détaillés
     st.subheader("📈 Évolution et Détails du Cash-Flow sur 20 Ans")
-    
     tab1, tab2 = st.columns(2)
     with tab1:
         fig_cf_annuel = px.line(
-            df_cf_details,
-            x="Annee",
-            y="CashFlow_Annuel",
-            color="Bien",
-            markers=True,
-            title="Évolution du Cash-Flow Annuel (€)",
-            labels={"Annee": "Année", "CashFlow_Annuel": "Cash-Flow Annuel (€)"}
+            df_cf_details, x="Annee", y="CashFlow_Annuel", color="Bien", markers=True,
+            title="Évolution du Cash-Flow Annuel (€)", labels={"Annee": "Année", "CashFlow_Annuel": "Cash-Flow Annuel (€)"}
         )
         fig_cf_annuel.update_layout(hovermode="x unified")
         st.plotly_chart(fig_cf_annuel, use_container_width=True)
 
     with tab2:
         fig_cf_cumule = px.line(
-            df_cf_details,
-            x="Annee",
-            y="CashFlow_Cumule",
-            color="Bien",
-            markers=True,
-            title="Progression du Cash-Flow Cumulé (€)",
-            labels={"Annee": "Année", "CashFlow_Cumule": "Cumul (€)"}
+            df_cf_details, x="Annee", y="CashFlow_Cumule", color="Bien", markers=True,
+            title="Progression du Cash-Flow Cumulé (€)", labels={"Annee": "Année", "CashFlow_Cumule": "Cumul (€)"}
         )
         fig_cf_cumule.update_layout(hovermode="x unified")
         st.plotly_chart(fig_cf_cumule, use_container_width=True)
 
     st.markdown("---")
 
-    # 4. Tableau complet des biens
+    # 4. Tableau complet
     st.subheader("📋 Classement et Détails des Biens")
     st.dataframe(
         df[["id", "nom", "ville", "prix_achat", "cout_total", "loyer_mensuel", "renta_brute", "renta_nette", "cash_flow_mois", "cf_cumule_20ans"]],
@@ -172,13 +161,60 @@ if not df.empty:
         use_container_width=True
     )
 
-    # 5. Section Suppression
+    st.markdown("---")
+
+    # 5. GESTION DES BIENS (MODIFICATION & SUPPRESSION)
+    st.subheader("⚙️ Gestion des Biens")
+    
+    options_dict = {f"ID {row['id']} - {row['nom']} ({row['ville']})": int(row['id']) for _, row in df.iterrows()}
+    
+    # SECTION MODIFICATION
+    with st.expander("✏️ Modifier un bien"):
+        selected_edit_label = st.selectbox("Choisir le bien à modifier", options=list(options_dict.keys()), key="select_edit")
+        edit_id = options_dict[selected_edit_label]
+        
+        # Récupération des données actuelles du bien sélectionné
+        bien = df[df['id'] == edit_id].iloc[0]
+        
+        with st.form("edit_form"):
+            u_nom = st.text_input("Nom du bien", value=str(bien['nom']))
+            u_ville = st.text_input("Ville", value=str(bien['ville']))
+            
+            uc1, uc2 = st.columns(2)
+            with uc1:
+                u_prix_achat = st.number_input("Prix d'achat (€)", min_value=0.0, value=float(bien['prix_achat']), step=5000.0)
+                u_frais_notaire = st.number_input("Notaire (€)", min_value=0.0, value=float(bien['frais_notaire']), step=500.0)
+                u_travaux = st.number_input("Travaux (€)", min_value=0.0, value=float(bien['travaux']), step=1000.0)
+                u_loyer_mensuel = st.number_input("Loyer Mensuel (€)", min_value=0.0, value=float(bien['loyer_mensuel']), step=50.0)
+            
+            with uc2:
+                u_charges = st.number_input("Charges / An (€)", min_value=0.0, value=float(bien['charges_annuelles']), step=100.0)
+                u_taxe_f = st.number_input("Taxe Foncière / An (€)", min_value=0.0, value=float(bien['taxe_fonciere']), step=50.0)
+                u_apport = st.number_input("Apport (€)", min_value=0.0, value=float(bien['apport']), step=1000.0)
+                u_taux = st.number_input("Taux Crédit (%)", min_value=0.0, value=float(bien['taux_credit']), step=0.1)
+            
+            u_duree = st.number_input("Durée Emprunt (ans)", min_value=1, max_value=30, value=int(bien['duree_credit']))
+            u_irl = st.number_input("Indexation IRL / An (%)", min_value=0.0, max_value=10.0, value=float(bien['irl_annuel']), step=0.1)
+            
+            update_btn = st.form_submit_button("💾 Enregistrer les modifications", type="primary")
+            if update_btn and u_nom:
+                updated_data = {
+                    "nom": u_nom, "ville": u_ville, "prix_achat": u_prix_achat,
+                    "frais_notaire": u_frais_notaire, "travaux": u_travaux,
+                    "loyer_mensuel": u_loyer_mensuel, "charges_annuelles": u_charges,
+                    "taxe_fonciere": u_taxe_f, "apport": u_apport, "taux_credit": u_taux,
+                    "duree_credit": u_duree, "irl_annuel": u_irl
+                }
+                update_property(edit_id, updated_data)
+                st.success("Bien mis à jour avec succès !")
+                st.rerun()
+
+    # SECTION SUPPRESSION
     with st.expander("🗑️ Supprimer un bien"):
-        options_dict = {f"ID {row['id']} - {row['nom']} ({row['ville']})": int(row['id']) for _, row in df.iterrows()}
-        selected_label = st.selectbox("Choisir le bien à supprimer", options=list(options_dict.keys()))
+        selected_del_label = st.selectbox("Choisir le bien à supprimer", options=list(options_dict.keys()), key="select_del")
         
         if st.button("Confirmer la suppression", type="primary"):
-            id_to_del = options_dict[selected_label]
+            id_to_del = options_dict[selected_del_label]
             delete_property(id_to_del)
             st.success("Bien supprimé avec succès.")
             st.rerun()
