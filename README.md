@@ -70,8 +70,12 @@ Pour chaque année $y \in [1, 30]$ :
 
 ### 3. Charges d'exploitation
 
-Les charges réelles d'exploitation annuelles sont déductibles :
-$$\text{Charges Exploitation} = \text{Charges Copropriété (non récupérables)} + \text{Taxe Foncière} + \text{Assurance PNO} + \text{Frais Comptabilité SCI}$$
+Les charges réelles d'exploitation annuelles sont déductibles et payées par la SCI :
+$$\text{Charges Exploitation}_y = \text{Charges Copro} + \text{Taxe Foncière} + \text{Assurance PNO} + \text{Frais Compta} + \text{Frais Gestion Agence}_y$$
+
+$$\text{Frais Gestion Agence}_y = \text{Loyer Annuel Brut}_y \times \left(\frac{\text{Frais Gestion (\%)}}{100}\right)$$
+
+*(Exemple : 0% si autogestion directe, 7% à 8% TTC des encaissements bruts si délégué à une agence immobilière).*
 
 ---
 
@@ -200,6 +204,7 @@ La table `properties` stocke toutes les caractéristiques d'un projet immobilier
 | `taxe_fonciere` | `REAL` | Taxe foncière annuelle (€) |
 | `assurance_pno` | `REAL` | Assurance PNO annuelle (€) |
 | `frais_compta` | `REAL` | Honoraires comptables annuels de la SCI (€) |
+| `frais_gestion_pct` | `REAL` | Frais de gestion d'agence immobilière (% du loyer) |
 | `vacance_semaines`| `INTEGER`| Semaines de vacance locative estimées par an |
 | `apport` | `REAL` | Apport personnel en capital (€) |
 | `taux_credit` | `REAL` | Taux d'intérêt annuel du crédit immobilier (%) |

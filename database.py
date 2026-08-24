@@ -43,6 +43,7 @@ def init_db():
             taxe_fonciere REAL,
             assurance_pno REAL DEFAULT 120,
             frais_compta REAL DEFAULT 500,
+            frais_gestion_pct REAL DEFAULT 0.0,
             vacance_semaines INTEGER DEFAULT 2,
             apport REAL DEFAULT 0,
             taux_credit REAL DEFAULT 3.5,
@@ -57,6 +58,7 @@ def init_db():
         ("meubles", "REAL DEFAULT 0"),
         ("assurance_pno", "REAL DEFAULT 120"),
         ("frais_compta", "REAL DEFAULT 500"),
+        ("frais_gestion_pct", "REAL DEFAULT 0.0"),
         ("vacance_semaines", "INTEGER DEFAULT 2"),
         ("apport", "REAL DEFAULT 0"),
         ("taux_credit", "REAL DEFAULT 3.5"),
@@ -101,8 +103,9 @@ def load_properties():
     # Sécurité supplémentaire : s'assurer que toutes les colonnes requises existent dans le DataFrame
     defaults = {
         'meubles': 0.0, 'assurance_pno': 120.0, 'frais_compta': 500.0,
-        'vacance_semaines': 2, 'apport': 0.0, 'taux_credit': 3.5,
-        'duree_credit': 20, 'irl_annuel': 1.5, 'part_terrain_pct': 15.0
+        'frais_gestion_pct': 0.0, 'vacance_semaines': 2, 'apport': 0.0,
+        'taux_credit': 3.5, 'duree_credit': 20, 'irl_annuel': 1.5,
+        'part_terrain_pct': 15.0
     }
     for col, default_val in defaults.items():
         if col not in df.columns:
@@ -116,18 +119,18 @@ def save_property(data):
         INSERT INTO properties (
             nom, ville, prix_achat, frais_notaire, travaux, meubles,
             loyer_mensuel, charges_annuelles, taxe_fonciere, assurance_pno,
-            frais_compta, vacance_semaines, apport, taux_credit, duree_credit,
-            irl_annuel, part_terrain_pct
+            frais_compta, frais_gestion_pct, vacance_semaines, apport,
+            taux_credit, duree_credit, irl_annuel, part_terrain_pct
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     '''
     params = (
         data['nom'], data['ville'], float(data['prix_achat']), float(data['frais_notaire']),
         float(data['travaux']), float(data['meubles']), float(data['loyer_mensuel']),
         float(data['charges_annuelles']), float(data['taxe_fonciere']), float(data['assurance_pno']),
-        float(data['frais_compta']), int(data['vacance_semaines']), float(data['apport']),
-        float(data['taux_credit']), int(data['duree_credit']), float(data['irl_annuel']),
-        float(data['part_terrain_pct'])
+        float(data['frais_compta']), float(data.get('frais_gestion_pct', 0.0)),
+        int(data['vacance_semaines']), float(data['apport']), float(data['taux_credit']),
+        int(data['duree_credit']), float(data['irl_annuel']), float(data['part_terrain_pct'])
     )
     if client:
         client.execute(query, params)
@@ -144,17 +147,18 @@ def update_property(prop_id, data):
         UPDATE properties
         SET nom = ?, ville = ?, prix_achat = ?, frais_notaire = ?, travaux = ?, meubles = ?,
             loyer_mensuel = ?, charges_annuelles = ?, taxe_fonciere = ?, assurance_pno = ?,
-            frais_compta = ?, vacance_semaines = ?, apport = ?, taux_credit = ?,
-            duree_credit = ?, irl_annuel = ?, part_terrain_pct = ?
+            frais_compta = ?, frais_gestion_pct = ?, vacance_semaines = ?, apport = ?,
+            taux_credit = ?, duree_credit = ?, irl_annuel = ?, part_terrain_pct = ?
         WHERE id = ?
     '''
     params = (
         data['nom'], data['ville'], float(data['prix_achat']), float(data['frais_notaire']),
         float(data['travaux']), float(data['meubles']), float(data['loyer_mensuel']),
         float(data['charges_annuelles']), float(data['taxe_fonciere']), float(data['assurance_pno']),
-        float(data['frais_compta']), int(data['vacance_semaines']), float(data['apport']),
-        float(data['taux_credit']), int(data['duree_credit']), float(data['irl_annuel']),
-        float(data['part_terrain_pct']), int(prop_id)
+        float(data['frais_compta']), float(data.get('frais_gestion_pct', 0.0)),
+        int(data['vacance_semaines']), float(data['apport']), float(data['taux_credit']),
+        int(data['duree_credit']), float(data['irl_annuel']), float(data['part_terrain_pct']),
+        int(prop_id)
     )
     if client:
         client.execute(query, params)

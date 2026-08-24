@@ -188,6 +188,10 @@ def calculate_metrics_sci_is(df):
     if df.empty:
         return df, pd.DataFrame()
 
+    # Sécurité colonnes
+    if 'frais_gestion_pct' not in df.columns:
+        df['frais_gestion_pct'] = 0.0
+
     df['cout_projet'] = df['prix_achat'] + df['frais_notaire'] + df['travaux'] + df['meubles']
     df['emprunt'] = df['cout_projet'] - df['apport']
 
@@ -216,6 +220,7 @@ def calculate_metrics_sci_is(df):
         total_cf_apres_is = 0
         cumul_cf = 0
         deficit_reportable = 0.0
+        taux_gestion = (row['frais_gestion_pct'] / 100.0) if pd.notna(row['frais_gestion_pct']) else 0.0
 
         for y in range(1, 31):
             interets_annee = 0
@@ -236,8 +241,17 @@ def calculate_metrics_sci_is(df):
             mois_loues = 12 - (row['vacance_semaines'] / 4.33)
             loyer_annuel_brut = (row['loyer_mensuel'] * mois_loues) * ((1 + row['irl_annuel'] / 100) ** (y - 1))
 
-            # Charges d'exploitation
-            charges_exploit = row['charges_annuelles'] + row['taxe_fonciere'] + row['assurance_pno'] + row['frais_compta']
+            # Frais de gestion locative de l'année
+            frais_gestion_annee = loyer_annuel_brut * taux_gestion
+
+            # Charges d'exploitation réelles (copro + TF + PNO + compta + gestion agence)
+            charges_exploit = (
+                row['charges_annuelles']
+                + row['taxe_fonciere']
+                + row['assurance_pno']
+                + row['frais_compta']
+                + frais_gestion_annee
+            )
             
             # Amortissements fiscaux applicables cette année
             amort_actuel = amort_bati_annuel if y <= 30 else 0.0
@@ -273,6 +287,7 @@ def calculate_metrics_sci_is(df):
                 "Bien_ID": row['id'],
                 "Bien": f"{row['nom']} ({row['ville'] or 'N/C'})",
                 "Loyer_Brut": loyer_annuel_brut,
+                "Frais_Gestion": frais_gestion_annee,
                 "Charges_Exploitation": charges_exploit,
                 "Interets_Credit": interets_annee,
                 "Capital_Amorti": capital_amorti_annee,
@@ -293,8 +308,16 @@ def calculate_metrics_sci_is(df):
 
     # Calculs pour l'Année 1
     df['loyer_net_vacance_y1'] = df['loyer_mensuel'] * (12 - (df['vacance_semaines'] / 4.33))
+    df['frais_gestion_y1'] = df['loyer_net_vacance_y1'] * (df['frais_gestion_pct'] / 100.0)
+    df['charges_totales_y1'] = (
+        df['charges_annuelles']
+        + df['taxe_fonciere']
+        + df['assurance_pno']
+        + df['frais_compta']
+        + df['frais_gestion_y1']
+    )
     df['renta_brute'] = (df['loyer_net_vacance_y1'] / df['cout_projet']) * 100
-    df['renta_nette'] = ((df['loyer_net_vacance_y1'] - df['charges_annuelles'] - df['taxe_fonciere'] - df['assurance_pno'] - df['frais_compta']) / df['cout_projet']) * 100
+    df['renta_nette'] = ((df['loyer_net_vacance_y1'] - df['charges_totales_y1']) / df['cout_projet']) * 100
     
     # Cash-flow mensuel moyen Année 1 après IS
     df_y1 = df_cf_details[df_cf_details['Annee'] == 1].set_index("Bien_ID")
@@ -327,10 +350,11 @@ with st.sidebar:
             travaux = st.number_input("Travaux (€)", min_value=0.0, value=8000.0, step=1000.0, help="Amortis sur 10 ans")
             meubles = st.number_input("Mobilier (€)", min_value=0.0, value=3000.0, step=500.0, help="Amortis sur 5 ans")
 
-        st.markdown("**📈 Revenus Locatifs**")
+        st.markdown("**📈 Revenus Locatifs & Gestion**")
         c3, c4 = st.columns(2)
         with c3:
             loyer_mensuel = st.number_input("Loyer mensuel HC (€)", min_value=0.0, value=580.0, step=20.0)
+            frais_gestion_pct = st.number_input("Frais Gestion Agence (% loyer)", min_value=0.0, max_value=25.0, value=0.0, step=0.5, help="0% si autogestion, 7% à 8% si délégué à une agence")
         with c4:
             vacance_semaines = st.number_input("Vacance (sem/an)", min_value=0, max_value=26, value=2)
 
@@ -361,7 +385,8 @@ with st.sidebar:
                     "nom": nom.strip(), "ville": ville.strip(), "prix_achat": prix_achat, "frais_notaire": frais_notaire,
                     "travaux": travaux, "meubles": meubles, "loyer_mensuel": loyer_mensuel,
                     "charges_annuelles": charges, "taxe_fonciere": taxe_f, "assurance_pno": assurance_pno,
-                    "frais_compta": frais_compta, "vacance_semaines": vacance_semaines, "apport": apport,
+                    "frais_compta": frais_compta, "frais_gestion_pct": frais_gestion_pct,
+                    "vacance_semaines": vacance_semaines, "apport": apport,
                     "taux_credit": taux, "duree_credit": duree, "irl_annuel": irl, "part_terrain_pct": part_terrain
                 })
                 st.success("Studio ajouté avec succès !")
@@ -377,7 +402,7 @@ with st.sidebar:
         • Amortissement Bâti : 30 ans<br>
         • Amortissement Travaux : 10 ans<br>
         • Amortissement Meubles : 5 ans<br>
-        • Frais de notaire déduits en A1<br>
+        • Frais de gestion & notaire déductibles<br>
         • IS à 15% & Report illimité des déficits
     </div>
     """, unsafe_allow_html=True)
@@ -490,8 +515,8 @@ else:
         st.dataframe(
             df[[
                 "nom", "ville", "prix_achat", "cout_projet", "apport", 
-                "loyer_mensuel", "mensualite_credit", "renta_brute", 
-                "renta_nette", "cf_mensuel_y1_is", "cf_30ans_apres_is"
+                "loyer_mensuel", "frais_gestion_pct", "mensualite_credit", 
+                "renta_brute", "renta_nette", "cf_mensuel_y1_is", "cf_30ans_apres_is"
             ]],
             column_config={
                 "nom": st.column_config.TextColumn("Studio", width="medium"),
@@ -500,6 +525,7 @@ else:
                 "cout_projet": st.column_config.NumberColumn("Coût Total", format="%.0f €"),
                 "apport": st.column_config.NumberColumn("Apport", format="%.0f €"),
                 "loyer_mensuel": st.column_config.NumberColumn("Loyer HC", format="%.0f €/m"),
+                "frais_gestion_pct": st.column_config.NumberColumn("Gestion Agence", format="%.1f %%"),
                 "mensualite_credit": st.column_config.NumberColumn("Crédit/Mois", format="%.0f €"),
                 "renta_brute": st.column_config.NumberColumn("Renta Brute", format="%.2f %%"),
                 "renta_nette": st.column_config.NumberColumn("Renta Nette", format="%.2f %%"),
@@ -563,7 +589,7 @@ else:
             📌 <strong>Analyse de la courbe sur 30 ans :</strong><br>
             • <strong>Années 1 à 5/10 :</strong> Trésorerie optimisée par la déduction des meubles (5 ans), des travaux (10 ans) et des frais de notaire (A1).<br>
             • <strong>Année d'extinction du crédit (ex: 20 ans) :</strong> Le remboursement d'emprunt tombe à 0 €, ce qui génère une <strong>forte hausse du cash-flow annuel net</strong>.<br>
-            • <strong>Années 21 à 30 :</strong> Pleine perception des loyers réévalués (IRL) avec poursuite de l'amortissement du composant bâti jusqu'à 30 ans.
+            • <strong>Années 21 à 30 :</strong> Pleine perception des loyers réévalués (IRL) nets de charges de gestion et copropriété, avec poursuite de l'amortissement du bâti jusqu'à 30 ans.
         </div>
         """, unsafe_allow_html=True)
 
@@ -577,6 +603,7 @@ else:
         <div class="info-box">
             💡 <strong>Mécanisme Fiscal de la SCI à l'IS sur 30 Ans :</strong><br>
             • <strong>Amortissements décomposés :</strong> Bâti (30 ans), Travaux (10 ans), Mobilier (5 ans).<br>
+            • <strong>Charges déductibles réelles :</strong> Copro, Taxe Foncière, Assurance PNO, Frais Compta et <strong>Frais de Gestion Agence</strong>.<br>
             • <strong>Frais de notaire :</strong> Passés en charge déductible immédiate en Année 1.<br>
             • <strong>Report indéfini des déficits :</strong> Aucun impôt n'est dû tant que le déficit fiscal cumulé n'a pas été entièrement absorbé.<br>
             • <strong>Taux d'IS :</strong> 15% sur la tranche de bénéfice &lt; 42 500 €.
@@ -591,7 +618,7 @@ else:
         )
         
         df_fiscal_view = df_cf_details[df_cf_details["Bien"] == sel_bien_fiscal][[
-            "Annee", "Loyer_Brut", "Charges_Exploitation", "Interets_Credit",
+            "Annee", "Loyer_Brut", "Frais_Gestion", "Charges_Exploitation", "Interets_Credit",
             "Amortissements_Fiscaux", "Resultat_Fiscal_Brut", "Deficit_Reporte",
             "Impot_IS_Paye", "CashFlow_Net_IS", "Cumul_CashFlow_IS", "Capital_Restant_Du"
         ]]
@@ -601,7 +628,8 @@ else:
             column_config={
                 "Annee": st.column_config.NumberColumn("Année", format="A%d"),
                 "Loyer_Brut": st.column_config.NumberColumn("Loyers Bruts", format="%.0f €"),
-                "Charges_Exploitation": st.column_config.NumberColumn("Charges Déduct.", format="%.0f €"),
+                "Frais_Gestion": st.column_config.NumberColumn("Gestion Agence", format="%.0f €"),
+                "Charges_Exploitation": st.column_config.NumberColumn("Total Charges", format="%.0f €"),
                 "Interets_Credit": st.column_config.NumberColumn("Intérêts Emprunt", format="%.0f €"),
                 "Amortissements_Fiscaux": st.column_config.NumberColumn("Amortissements", format="%.0f €"),
                 "Resultat_Fiscal_Brut": st.column_config.NumberColumn("Résultat Fiscal", format="%+.0f €"),
@@ -650,6 +678,11 @@ else:
                     u_travaux = st.number_input("Travaux (€)", value=float(b['travaux']), step=1000.0)
                     u_meubles = st.number_input("Meubles (€)", value=float(b['meubles']), step=500.0)
                     u_loyer = st.number_input("Loyer Mensuel (€)", value=float(b['loyer_mensuel']), step=20.0)
+                    u_gestion = st.number_input(
+                        "Frais Gestion Agence (% loyer)",
+                        value=float(b['frais_gestion_pct']) if ('frais_gestion_pct' in b and pd.notna(b['frais_gestion_pct'])) else 0.0,
+                        step=0.5, min_value=0.0, max_value=25.0
+                    )
                     u_vacance = st.number_input("Vacance (semaines/an)", value=int(b['vacance_semaines']))
                 with uc2:
                     u_charges = st.number_input("Charges Copro (€/an)", value=float(b['charges_annuelles']), step=50.0)
@@ -671,7 +704,8 @@ else:
                         "nom": u_nom, "ville": u_ville, "prix_achat": u_prix, "frais_notaire": u_notaire,
                         "travaux": u_travaux, "meubles": u_meubles, "loyer_mensuel": u_loyer,
                         "charges_annuelles": u_charges, "taxe_fonciere": u_tf, "assurance_pno": u_pno,
-                        "frais_compta": u_compta, "vacance_semaines": u_vacance, "apport": u_apport,
+                        "frais_compta": u_compta, "frais_gestion_pct": u_gestion,
+                        "vacance_semaines": u_vacance, "apport": u_apport,
                         "taux_credit": u_taux, "duree_credit": u_duree, "irl_annuel": u_irl, "part_terrain_pct": u_terrain
                     })
                     st.success("Modifications enregistrées !")
@@ -679,7 +713,7 @@ else:
 
         with col_tools:
             st.markdown("##### 📋 Cloner pour Scénario A/B")
-            st.caption("Dupliquez un studio en un clic pour tester des variantes (ex: négociation prix, taux bancaire...).")
+            st.caption("Dupliquez un studio en un clic pour tester des variantes (ex: avec vs sans agence, négociation prix...).")
             sel_clone = st.selectbox("Studio à dupliquer :", options=list(options_dict.keys()), key="clone_sel")
             clone_name = st.text_input("Nom de la variante :", value=f"{sel_clone.split('(')[0].strip()} (Scénario 2)")
             if st.button("📋 Dupliquer le studio", use_container_width=True):
